@@ -55,6 +55,7 @@ docker run --rm -it -e MTX_PROTOCOLS=tcp -p 8554:8554 bluenviron/mediamtx
 In another terminal, use FFmpeg to stream a video file (or a test source) to the server:
 ```bash
 ffmpeg -re -f lavfi -i testsrc=size=1280x720:rate=30 -vcodec libx264 -preset ultrafast -tune zerolatency -f rtsp rtsp://localhost:8554/live
+ffmpeg -re -i input.mp4 -c copy -f rtsp rtsp://localhost:8554/live
 ```
 
 ### 3. Run imgseq against the local stream
