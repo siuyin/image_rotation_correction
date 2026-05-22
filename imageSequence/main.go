@@ -51,9 +51,16 @@ func calcH(w, h, tgtW int) int {
 }
 
 func startFF(path string, w int, fps float64) (*exec.Cmd, io.ReadCloser) {
-	vf := fmt.Sprintf("fps=%f,scale=%d:-2", fps, w)
-	cmd := exec.Command("ffmpeg", "-i", path, "-vf", vf,
-		"-f", "image2pipe", "-pix_fmt", "rgb24", "-vcodec", "rawvideo", "-")
+	vf := fmt.Sprintf("fps=%f,scale=%d:-2:flags=neighbor", fps, w)
+	cmd := exec.Command("ffmpeg",
+		"-threads", "0", // Use all available cores
+		"-i", path,
+		"-vf", vf,
+		"-f", "image2pipe",
+		"-pix_fmt", "rgb24",
+		"-vcodec", "rawvideo",
+		"-sws_flags", "neighbor",
+		"-")
 	out, err := cmd.StdoutPipe()
 	if err != nil {
 		fmt.Printf("pipe failed: %v\n", err); os.Exit(1)
@@ -82,7 +89,7 @@ func save(m *image.RGBA, idx int, fps float64) {
 		return
 	}
 	defer f.Close()
-	jpeg.Encode(f, m, &jpeg.Options{Quality: 90})
+	jpeg.Encode(f, m, &jpeg.Options{Quality: 50})
 }
 
 func loop(out io.ReadCloser, w, h int, fps float64) {
