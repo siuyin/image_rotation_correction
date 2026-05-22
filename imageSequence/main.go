@@ -122,8 +122,17 @@ func loop(out io.ReadCloser, h int, fps float64) {
 	}
 }
 
+func usage() {
+	fmt.Printf("Usage: %s <video_path>\n", os.Args[0])
+	fmt.Println("\nExtracts frames from a video and saves them as JPEGs.")
+	fmt.Println("The output is stored in the 'output_frames' directory.")
+	fmt.Println("\nOptions:")
+	fmt.Println("  -h, --help  Show this help message")
+}
+
 func main() {
-	if len(os.Args) < 2 {
+	if len(os.Args) < 2 || os.Args[1] == "-h" || os.Args[1] == "--help" {
+		usage()
 		return
 	}
 	initStorage()
