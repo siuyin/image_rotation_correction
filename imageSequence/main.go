@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 )
 
 const outDir = "output_frames"
@@ -29,12 +30,11 @@ func initStorage() {
 }
 
 func getMeta(path string) (int, int) {
-	cmd := exec.Command("ffprobe", "-v", "error", "-select_streams", "v:0",
-		"-show_entries", "stream=width,height", "-of", "json", path)
-	out, err := cmd.Output()
-	if err != nil {
-		fmt.Printf("ffprobe failed: %v\n", err); os.Exit(1)
+	p := []string{"-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height", "-of", "json"}
+	if strings.HasPrefix(path, "rtsp://") {
+		p = append([]string{"-rtsp_transport", "tcp"}, p...)
 	}
+	out, _ := exec.Command("ffprobe", append(p, path)...).Output()
 	var b Probe
 	json.Unmarshal(out, &b)
 	if len(b.Streams) == 0 {
@@ -50,24 +50,23 @@ func calcH(w, h, tgtW int) int {
 	return int(float64(tgtW) * float64(h) / float64(w)) &^ 1
 }
 
+func isStream(p string) bool {
+	return strings.HasPrefix(p, "rtsp://") || strings.HasPrefix(p, "http://") ||
+		strings.HasPrefix(p, "https://") || strings.HasPrefix(p, "rtmp://")
+}
+
 func startFF(path string, w int, fps float64) (*exec.Cmd, io.ReadCloser) {
 	vf := fmt.Sprintf("fps=%f,scale=%d:-2:flags=neighbor", fps, w)
-	cmd := exec.Command("ffmpeg",
-		"-threads", "0", // Use all available cores
-		"-i", path,
-		"-vf", vf,
-		"-f", "image2pipe",
-		"-pix_fmt", "rgb24",
-		"-vcodec", "rawvideo",
-		"-sws_flags", "neighbor",
-		"-")
-	out, err := cmd.StdoutPipe()
-	if err != nil {
-		fmt.Printf("pipe failed: %v\n", err); os.Exit(1)
+	args := []string{"-i", path, "-vf", vf, "-f", "image2pipe", "-pix_fmt", "rgb24", "-vcodec", "rawvideo", "-sws_flags", "neighbor", "-threads", "0", "-"}
+	if isStream(path) {
+		args = append([]string{"-fflags", "nobuffer+discardcorrupt", "-flags", "low_delay"}, args...)
 	}
-	if err := cmd.Start(); err != nil {
-		fmt.Printf("start failed: %v\n", err); os.Exit(1)
+	if strings.HasPrefix(path, "rtsp://") {
+		args = append([]string{"-rtsp_transport", "tcp"}, args...)
 	}
+	cmd := exec.Command("ffmpeg", args...)
+	out, _ := cmd.StdoutPipe()
+	cmd.Start()
 	return cmd, out
 }
 

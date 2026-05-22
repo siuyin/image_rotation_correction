@@ -15,8 +15,9 @@ go build -o imgseq main.go
 
 ### 2. Run the application
 ```bash
-./imgseq [options] <path_to_video_file>
+./imgseq [options] <path_to_video_file_or_stream_url>
 ```
+The application supports local video files and live streams (RTSP, HTTP, HTTPS, RTMP). For RTSP streams, it automatically uses TCP transport for stability.
 The extracted frames will be saved in the `output_frames/` directory.
 
 ### Options
@@ -39,6 +40,26 @@ at frame 0 (0.00s)
 at frame 10 (5.00s)
 Finished. Processed 10 frames.
 done
+```
+
+## Testing with a Local Stream
+To test the application's stream processing capabilities without an external IP camera, you can set up a local RTSP stream.
+
+### 1. Start an RTSP Server
+The easiest way is to use [mediamtx](https://github.com/bluenviron/mediamtx):
+```bash
+docker run --rm -it -e MTX_PROTOCOLS=tcp -p 8554:8554 bluenviron/mediamtx
+```
+
+### 2. Stream a file to the server
+In another terminal, use FFmpeg to stream a video file (or a test source) to the server:
+```bash
+ffmpeg -re -f lavfi -i testsrc=size=1280x720:rate=30 -vcodec libx264 -preset ultrafast -tune zerolatency -f rtsp rtsp://localhost:8554/live
+```
+
+### 3. Run imgseq against the local stream
+```bash
+./imgseq rtsp://localhost:8554/live
 ```
 
 ## Technical Analysis
