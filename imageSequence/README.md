@@ -62,6 +62,15 @@ ffmpeg -re -f lavfi -i testsrc=size=1280x720:rate=30 -vcodec libx264 -preset ult
 ./imgseq rtsp://localhost:8554/live
 ```
 
+### Troubleshooting: "Connection refused"
+If you see `Connection refused`, it usually means the RTSP server is not running or the port is blocked.
+1.  **Check if the server is listening**:
+    ```bash
+    ss -tuln | grep 8554
+    ```
+2.  **Verify Docker**: Ensure the `mediamtx` container is running (`docker ps`).
+3.  **Order Matters**: You **must** start the server (Step 1) before the stream (Step 2), and the stream before `imgseq` (Step 3).
+
 ## Technical Analysis
 ...
 The application is written in Go and uses the `ffmpeg` and `ffprobe` command-line tools as subprocesses for video processing. This approach avoids the complexities and versioning issues associated with CGO bindings.
