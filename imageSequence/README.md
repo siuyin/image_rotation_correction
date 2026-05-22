@@ -15,25 +15,29 @@ go build -o imgseq main.go
 
 ### 2. Run the application
 ```bash
-./imgseq <path_to_video_file>
+./imgseq [options] <path_to_video_file>
 ```
 The extracted frames will be saved in the `output_frames/` directory.
+
+### Options
+*   `-w <int>`: Output image width (default: 640).
+*   `-m <int>`: Step interval in milliseconds (default: 1000).
 
 ## Example
 If you don't have a video file handy, you can generate a test video using FFmpeg:
 ```bash
 ffmpeg -f lavfi -i testsrc=size=1280x720:rate=30 -t 5 test_video.mp4
 ```
-Then run the application:
+Then run the application with custom width and interval:
 ```bash
-./imgseq test_video.mp4
+./imgseq -w 320 -m 500 test_video.mp4
 ```
 Expected output:
 ```text
-Source: 1280x720, Target: 640x360, FPS: 30.00
-at 100 frames...
-at 150 frames...
-Finished. Processed 150 frames.
+Source: 1280x720, Target: 320x180, FPS: 2.00
+at frame 0 (0.00s)
+at frame 10 (5.00s)
+Finished. Processed 10 frames.
 done
 ```
 

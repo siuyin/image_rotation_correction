@@ -6,7 +6,6 @@ import (
 	"testing"
 )
 
-// generateTestVideo creates a 1-second 320x240 test video at 10fps
 func generateTestVideo(t *testing.T, path string) {
 	cmd := exec.Command("ffmpeg", "-y", "-f", "lavfi", "-i", "testsrc=size=320x240:rate=10", "-t", "1", "-vcodec", "libx264", path)
 	if err := cmd.Run(); err != nil {
@@ -14,37 +13,19 @@ func generateTestVideo(t *testing.T, path string) {
 	}
 }
 
-func TestParseRate(t *testing.T) {
-	tests := []struct {
-		in  string
-		exp float64
-	}{
-		{"30/1", 30.0},
-		{"60000/1001", 59.94005994005994},
-		{"invalid", 0.0},
-		{"30/0", 0.0},
-	}
-	for _, tt := range tests {
-		res := parseRate(tt.in)
-		if res != tt.exp && (res-tt.exp) > 0.001 {
-			t.Errorf("parseRate(%s) = %f; want %f", tt.in, res, tt.exp)
-		}
-	}
-}
-
 func TestCalcH(t *testing.T) {
 	tests := []struct {
-		w, h, exp int
+		w, h, tgtW, exp int
 	}{
-		{1920, 1080, 360}, // 640 * 1080 / 1920 = 360
-		{1280, 720, 360},  // 640 * 720 / 1280 = 360
-		{0, 720, 0},
-		{100, 105, 672},   // (640 * 105 / 100) = 672
+		{1920, 1080, 640, 360},
+		{1280, 720, 640, 360},
+		{0, 720, 640, 0},
+		{100, 105, 640, 672},
 	}
 	for _, tt := range tests {
-		res := calcH(tt.w, tt.h)
+		res := calcH(tt.w, tt.h, tt.tgtW)
 		if res != tt.exp {
-			t.Errorf("calcH(%d, %d) = %d; want %d", tt.w, tt.h, res, tt.exp)
+			t.Errorf("calcH(%d, %d, %d) = %d; want %d", tt.w, tt.h, tt.tgtW, res, tt.exp)
 		}
 	}
 }
@@ -59,7 +40,6 @@ func TestToImg(t *testing.T) {
 	if m.Rect.Dx() != w || m.Rect.Dy() != h {
 		t.Errorf("wrong image dimensions: %vx%v", m.Rect.Dx(), m.Rect.Dy())
 	}
-	// Check first pixel (RGB)
 	if m.Pix[0] != 0 || m.Pix[1] != 1 || m.Pix[2] != 2 || m.Pix[3] != 255 {
 		t.Errorf("wrong pixel values: %v", m.Pix[0:4])
 	}
@@ -70,9 +50,9 @@ func TestGetMeta(t *testing.T) {
 	generateTestVideo(t, path)
 	defer os.Remove(path)
 
-	w, h, fps := getMeta(path)
-	if w != 320 || h != 240 || fps != 10.0 {
-		t.Errorf("getMeta failed: %dx%d @ %f", w, h, fps)
+	w, h := getMeta(path)
+	if w != 320 || h != 240 {
+		t.Errorf("getMeta failed: %dx%d", w, h)
 	}
 }
 
@@ -81,15 +61,15 @@ func TestIntegration(t *testing.T) {
 	generateTestVideo(t, path)
 	defer os.Remove(path)
 	
-	// Clean output dir for test
 	os.RemoveAll(outDir)
 	initStorage()
 	defer os.RemoveAll(outDir)
 
-	w, h, fps := getMeta(path)
-	th := calcH(w, h)
-	cmd, out := startFF(path)
-	loop(out, th, fps)
+	w, h := getMeta(path)
+	tgtW, tFPS := 160, 2.0
+	th := calcH(w, h, tgtW)
+	cmd, out := startFF(path, tgtW, tFPS)
+	loop(out, tgtW, th, tFPS)
 	cmd.Wait()
 
 	files, _ := os.ReadDir(outDir)

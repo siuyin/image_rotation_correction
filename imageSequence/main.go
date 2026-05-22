@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"image"
 	"image/jpeg"
@@ -9,20 +10,14 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
-	"strings"
 )
 
-const (
-	outDir = "output_frames"
-	tgtW   = 640
-)
+const outDir = "output_frames"
 
 type Probe struct {
 	Streams []struct {
-		W    int    `json:"width"`
-		H    int    `json:"height"`
-		Rate string `json:"avg_frame_rate"`
+		W int `json:"width"`
+		H int `json:"height"`
 	} `json:"streams"`
 }
 
@@ -33,54 +28,38 @@ func initStorage() {
 	}
 }
 
-func parseRate(rate string) float64 {
-	p := strings.Split(rate, "/")
-	if len(p) != 2 {
-		return 0
-	}
-	n, _ := strconv.ParseFloat(p[0], 64)
-	d, _ := strconv.ParseFloat(p[1], 64)
-	if d == 0 {
-		return 0
-	}
-	return n / d
-}
-
-func getMeta(path string) (int, int, float64) {
+func getMeta(path string) (int, int) {
 	cmd := exec.Command("ffprobe", "-v", "error", "-select_streams", "v:0",
-		"-show_entries", "stream=width,height,avg_frame_rate", "-of", "json", path)
+		"-show_entries", "stream=width,height", "-of", "json", path)
 	out, err := cmd.Output()
 	if err != nil {
-		fmt.Printf("ffprobe failed: %v\n", err)
-		os.Exit(1)
+		fmt.Printf("ffprobe failed: %v\n", err); os.Exit(1)
 	}
 	var b Probe
 	json.Unmarshal(out, &b)
 	if len(b.Streams) == 0 {
 		fmt.Println("no stream"); os.Exit(1)
 	}
-	s := b.Streams[0]
-	return s.W, s.H, parseRate(s.Rate)
+	return b.Streams[0].W, b.Streams[0].H
 }
 
-func calcH(w, h int) int {
+func calcH(w, h, tgtW int) int {
 	if w <= 0 {
 		return 0
 	}
 	return int(float64(tgtW) * float64(h) / float64(w)) &^ 1
 }
 
-func startFF(path string) (*exec.Cmd, io.ReadCloser) {
-	cmd := exec.Command("ffmpeg", "-i", path, "-vf", fmt.Sprintf("scale=%d:-2", tgtW),
+func startFF(path string, w int, fps float64) (*exec.Cmd, io.ReadCloser) {
+	vf := fmt.Sprintf("fps=%f,scale=%d:-2", fps, w)
+	cmd := exec.Command("ffmpeg", "-i", path, "-vf", vf,
 		"-f", "image2pipe", "-pix_fmt", "rgb24", "-vcodec", "rawvideo", "-")
 	out, err := cmd.StdoutPipe()
 	if err != nil {
-		fmt.Printf("pipe failed: %v\n", err)
-		os.Exit(1)
+		fmt.Printf("pipe failed: %v\n", err); os.Exit(1)
 	}
 	if err := cmd.Start(); err != nil {
-		fmt.Printf("start failed: %v\n", err)
-		os.Exit(1)
+		fmt.Printf("start failed: %v\n", err); os.Exit(1)
 	}
 	return cmd, out
 }
@@ -90,10 +69,7 @@ func toImg(buf []byte, w, h int) *image.RGBA {
 	for y := 0; y < h; y++ {
 		for x := 0; x < w; x++ {
 			si, di := (y*w+x)*3, (y*w+x)*4
-			m.Pix[di] = buf[si]
-			m.Pix[di+1] = buf[si+1]
-			m.Pix[di+2] = buf[si+2]
-			m.Pix[di+3] = 255
+			m.Pix[di], m.Pix[di+1], m.Pix[di+2], m.Pix[di+3] = buf[si], buf[si+1], buf[si+2], 255
 		}
 	}
 	return m
@@ -109,37 +85,41 @@ func save(m *image.RGBA, idx int, fps float64) {
 	jpeg.Encode(f, m, &jpeg.Options{Quality: 90})
 }
 
-func loop(out io.ReadCloser, h int, fps float64) {
-	buf := make([]byte, tgtW*h*3)
+func loop(out io.ReadCloser, w, h int, fps float64) {
+	buf := make([]byte, w*h*3)
 	for i := 0; ; i++ {
 		if _, err := io.ReadFull(out, buf); err != nil {
 			break
 		}
-		save(toImg(buf, tgtW, h), i, fps)
-		if i%100 == 0 {
-			fmt.Printf("at %d\r", i)
+		save(toImg(buf, w, h), i, fps)
+		if i%10 == 0 {
+			fmt.Printf("at frame %d (%.2fs)\r", i, float64(i)/fps)
 		}
 	}
 }
 
 func usage() {
-	fmt.Printf("Usage: %s <video_path>\n", os.Args[0])
+	fmt.Printf("Usage: %s [options] <video_path>\n", os.Args[0])
 	fmt.Println("\nExtracts frames from a video and saves them as JPEGs.")
 	fmt.Println("The output is stored in the 'output_frames' directory.")
 	fmt.Println("\nOptions:")
-	fmt.Println("  -h, --help  Show this help message")
+	flag.PrintDefaults()
 }
 
 func main() {
-	if len(os.Args) < 2 || os.Args[1] == "-h" || os.Args[1] == "--help" {
+	flag.Usage = usage
+	w := flag.Int("w", 640, "output image width")
+	ms := flag.Int("m", 1000, "step interval in milliseconds")
+	flag.Parse()
+	if flag.NArg() < 1 {
 		usage()
 		return
 	}
 	initStorage()
-	w, h, fps := getMeta(os.Args[1])
-	th := calcH(w, h)
-	cmd, out := startFF(os.Args[1])
-	loop(out, th, fps)
+	vW, vH := getMeta(flag.Arg(0))
+	th, tFPS := calcH(vW, vH, *w), 1000.0/float64(*ms)
+	cmd, out := startFF(flag.Arg(0), *w, tFPS)
+	loop(out, *w, th, tFPS)
 	cmd.Wait()
 	fmt.Println("\ndone")
 }
