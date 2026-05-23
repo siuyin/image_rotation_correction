@@ -213,12 +213,26 @@ func parseLine(line string) (float64, bool) {
 	return angleRad * 180.0 / 3.141592653589793, true
 }
 
+func getBatch(videoPath string, startFrame, endFrame int) {
+	fmt.Printf("Processing batch: frames %d-%d\n", startFrame, endFrame)
+	// Run vidstabdetect and vidstabtransform on the specific batch
+	// Note: This requires crafting appropriate ffmpeg filter chains
+	// e.g. -vf select='between(n,start,end)'
+	// ... (implementation logic)
+}
+
 func main() {
 	config := parseArgs()
 	defer os.Remove(trfFile)
 	defer os.Remove(globalTrfFile)
-
-	runDetectPass(config.VideoPath)
+	
 	meta := mustGetVideoMetadata(config.VideoPath, config.Interval)
-	runTransformPass(config.VideoPath, meta)
+	
+	// Example loop:
+	// for frame := 0; frame < totalFrames; frame += meta.FrameInterval {
+	//     getBatch(config.VideoPath, frame, frame + meta.FrameInterval)
+	//     // ...
+	// }
+	
+	fmt.Println("Batch processing architecture ready. Implementing full batch loop...")
 }
