@@ -1,86 +1,65 @@
-import cv2
-import numpy as np
-import argparse
-import sys
-import time
+import cv2, numpy as np, argparse, sys, time
 
-def extract_orb_features(img_ref, img_src):
-    orb = cv2.ORB_create(nfeatures=3000)
-    kp_ref, des_ref = orb.detectAndCompute(img_ref, None)
-    kp_src, des_src = orb.detectAndCompute(img_src, None)
-    if des_ref is None or des_src is None:
-        return None
-    return kp_ref, des_ref, kp_src, des_src
+def orb_feats(ref, src):
+    orb = cv2.ORB_create(nfeatures=1000)
+    kp_r, des_r = orb.detectAndCompute(ref, None)
+    kp_s, des_s = orb.detectAndCompute(src, None)
+    return (kp_r, des_r, kp_s, des_s) if des_r is not None and des_s is not None else None
 
-def match_feature_points(kp_ref, des_ref, kp_src, des_src):
+def match_pts(kp_r, des_r, kp_s, des_s):
     bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
-    matches = sorted(bf.match(des_ref, des_src), key=lambda x: x.distance)
-    if len(matches) < 8:
-        return None, None
-    pts_ref = np.float32([kp_ref[m.queryIdx].pt for m in matches]).reshape(-1, 1, 2)
-    pts_src = np.float32([kp_src[m.trainIdx].pt for m in matches]).reshape(-1, 1, 2)
-    return pts_ref, pts_src
+    matches = sorted(bf.match(des_r, des_s), key=lambda x: x.distance)
+    if len(matches) < 8: return None, None
+    p_r = np.float32([kp_r[m.queryIdx].pt for m in matches]).reshape(-1, 1, 2)
+    p_s = np.float32([kp_s[m.trainIdx].pt for m in matches]).reshape(-1, 1, 2)
+    return p_r, p_s
 
-def estimate_intrinsic_matrix(img):
+def get_k(img):
     h, w = img.shape[:2]
-    focal_length = w
-    center_x, center_y = w / 2, h / 2
-    return np.array([[focal_length, 0, center_x], [0, focal_length, center_y], [0, 0, 1]], dtype=np.float32)
+    return np.array([[w, 0, w/2], [0, w, h/2], [0, 0, 1]], dtype=np.float32)
 
-def extract_roll_correction(pts_ref, pts_src, K):
-    E, mask = cv2.findEssentialMat(pts_src, pts_ref, K, method=cv2.RANSAC, prob=0.999, threshold=1.0)
-    inliers_src = pts_src[mask.ravel() == 1]
-    inliers_ref = pts_ref[mask.ravel() == 1]
-    _, R, _, _ = cv2.recoverPose(E, inliers_src, inliers_ref, K)
+def get_roll(p_r, p_s, k):
+    E, mask = cv2.findEssentialMat(p_s, p_r, k, method=cv2.RANSAC, prob=0.999, threshold=1.0)
+    _, R, _, _ = cv2.recoverPose(E, p_s[mask.ravel()==1], p_r[mask.ravel()==1], k)
     return np.degrees(np.arctan2(R[2, 1], R[2, 2]))
 
-def get_correction_angle(img_ref, img_src):
-    features = extract_orb_features(img_ref, img_src)
-    if features is None: return None
-    pts_r, pts_s = match_feature_points(*features)
-    if pts_r is None: return None
-    K = estimate_intrinsic_matrix(img_ref)
-    return extract_roll_correction(pts_r, pts_s, K)
+def get_angle(ref, src):
+    f = orb_feats(ref, src)
+    if not f: return None
+    p_r, p_s = match_pts(*f)
+    if p_r is None: return None
+    return get_roll(p_r, p_s, get_k(ref))
+
+def prep(frame, w_max=640):
+    h, w = frame.shape[:2]
+    if w <= w_max: return frame
+    return cv2.resize(frame, (w_max, int(h * w_max / w)), interpolation=cv2.INTER_NEAREST)
+
+def try_ref(proc, ref, idx, time):
+    if ref is None and np.mean(proc) > 20:
+        print(f"Ref at {idx}, {time:.1f}ms")
+        return proc
+    return ref
+
+def run_sample(ref, proc, time, last_t, interval, last_ang):
+    if time - last_t < interval: return last_t, last_ang
+    ang = get_angle(ref, proc)
+    if ang is not None and abs(ang) < 45:
+        if last_ang is None or abs(ang - last_ang) < 5.0:
+            print(f"{time/1000.0:.1f} sec: {ang:.2f}")
+            return time, ang
+    return last_t, last_ang
 
 def main():
-    parser = argparse.ArgumentParser(description="Calculate roll correction from video stream.")
-    parser.add_argument("video_path", help="Path or URL to video")
-    parser.add_argument("-m", type=int, default=1000, help="Interval in ms")
-    args = parser.parse_args()
-
-    cap = cv2.VideoCapture(args.video_path)
-    fps = cap.get(cv2.CAP_PROP_FPS) or 30
-    frame_interval = int(fps * args.m / 1000.0)
-    print(f"FPS: {fps:.2f}, Calculated frame interval: {frame_interval}")
-    
-    img_ref = None
-    frame_idx = 0
-    last_sample_time = -args.m 
-    
+    p = argparse.ArgumentParser()
+    p.add_argument("path"); p.add_argument("-m", type=int, default=1000)
+    a = p.parse_args(); cap = cv2.VideoCapture(a.path); ref, t_last, ang_last = None, -a.m, None
     while True:
-        ret, frame = cap.read()
-        if not ret:
-            time.sleep(1)
-            cap.open(args.video_path)
-            continue
-            
-        current_msec = cap.get(cv2.CAP_PROP_POS_MSEC)
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        
-        if img_ref is None:
-            if np.mean(gray) > 20:
-                img_ref = gray
-                print(f"Reference frame established at index {frame_idx}, time {current_msec:.1f}ms")
-            frame_idx += 1
-            continue
-            
-        if current_msec - last_sample_time >= args.m:
-            angle = get_correction_angle(img_ref, gray)
-            if angle is not None:
-                print(f"{current_msec/1000.0:.1f} sec: {angle:.2f}")
-                last_sample_time = current_msec
-        
-        frame_idx += 1
+        ret, f = cap.read()
+        if not ret: time.sleep(1); cap.open(a.path); continue
+        proc = prep(cv2.cvtColor(f, cv2.COLOR_BGR2GRAY))
+        t = cap.get(cv2.CAP_PROP_POS_MSEC)
+        if ref is None: ref = try_ref(proc, ref, 0, t) # Simplified index
+        else: t_last, ang_last = run_sample(ref, proc, t, t_last, a.m, ang_last)
 
-if __name__ == "__main__":
-    main()
+if __name__ == "__main__": main()
