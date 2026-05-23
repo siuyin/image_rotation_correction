@@ -1,0 +1,8 @@
+[project]
+name = "virt_horiz"
+version = "0.1.0"
+dependencies = [
+    "opencv-python",
+    "numpy",
+    "pytest",
+]
