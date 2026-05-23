@@ -183,12 +183,19 @@ func processFrames(reader *bufio.Reader, meta Metadata) {
 
 func streamResults(meta Metadata) {
 	waitForFile(globalTrfFile)
-	file, err := os.Open(globalTrfFile)
+	
+	// Use tail -f to stream the file
+	cmd := exec.Command("tail", "-f", globalTrfFile)
+	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return
 	}
-	defer file.Close()
-	processFrames(bufio.NewReader(file), meta)
+	if err := cmd.Start(); err != nil {
+		return
+	}
+	defer cmd.Process.Kill()
+	
+	processFrames(bufio.NewReader(stdout), meta)
 }
 
 func parseLine(line string) (float64, bool) {
