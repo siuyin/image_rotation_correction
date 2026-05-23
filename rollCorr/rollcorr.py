@@ -67,14 +67,20 @@ def try_ref(proc_frame, ref_frame, timestamp):
         return proc_frame
     return ref_frame
 
+def apply_smoothing(new, last, alpha=0.3):
+    if last is None:
+        return new
+    return alpha * new + (1 - alpha) * last
+
 def run_sample(ref_frame, proc_frame, timestamp, last_ts, interval, last_ang):
     if timestamp - last_ts < interval:
         return last_ts, last_ang
     ang = get_angle(ref_frame, proc_frame)
     if ang is not None and abs(ang) < 45:
         if last_ang is None or abs(ang - last_ang) < 5.0:
-            print(f"{timestamp/1000.0:.1f} sec: {ang:.2f}")
-            return timestamp, ang
+            smoothed = apply_smoothing(ang, last_ang)
+            print(f"{timestamp/1000.0:.1f} sec: {smoothed:.2f}")
+            return timestamp, smoothed
     return last_ts, last_ang
 
 def read_frame(capture, video_path):
