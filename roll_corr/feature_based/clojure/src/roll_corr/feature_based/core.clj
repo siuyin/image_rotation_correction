@@ -1,5 +1,6 @@
 (ns roll-corr.feature-based.core
   (:gen-class)
+  (:require [clojure.string :as str])
   (:import [java.io File]
            [org.bytedeco.javacv FFmpegFrameGrabber OpenCVFrameConverter$ToMat]
            [org.bytedeco.opencv.opencv_core Mat KeyPoint DMatch Rect Point2f Point2fVector KeyPointVector DMatchVector]
@@ -61,21 +62,21 @@
   (println (format "Required Roll Correction: %.2f degrees" roll-angle)))
 
 (defn- print-usage []
-  (println "Usage: clojure -M -m roll-corr.feature-based.core [flags]")
-  (println "  -v, --video PATH      Path to video file (default: ~/tennis1.mp4)")
+  (println "Usage: clojure -M -m roll-corr.feature-based.core VIDEO_PATH [flags]")
+  (println "  VIDEO_PATH            Path to video file (REQUIRED)")
   (println "  -i, --interval MS     Sampling interval in ms (default: 1000)")
   (println "  -a, --area PERCENT    Central area percentage (default: 75)")
   (println "  -h, --help            Print this help"))
 
 (defn- parse-args [args]
-  (loop [args args options {:path (str (System/getProperty "user.home") "/tennis1.mp4") :interval 1000 :area 75}]
-    (cond
-      (empty? args) options
-      (#{ "-h" "--help" } (first args)) (assoc options :help true)
-      (#{ "-v" "--video" } (first args)) (recur (drop 2 args) (assoc options :path (second args)))
-      (#{ "-i" "--interval" } (first args)) (recur (drop 2 args) (assoc options :interval (Integer/parseInt (second args))))
-      (#{ "-a" "--area" } (first args)) (recur (drop 2 args) (assoc options :area (Integer/parseInt (second args))))
-      :else options)))
+  (let [path (first (remove #(str/starts-with? % "-") args))]
+    (loop [args (remove #(= % path) args) options {:path path :interval 1000 :area 75}]
+      (cond
+        (empty? args) options
+        (#{ "-h" "--help" } (first args)) (assoc options :help true)
+        (#{ "-i" "--interval" } (first args)) (recur (drop 2 args) (assoc options :interval (Integer/parseInt (second args))))
+        (#{ "-a" "--area" } (first args)) (recur (drop 2 args) (assoc options :area (Integer/parseInt (second args))))
+        :else options))))
 
 (defn- open-video [path]
   (let [grabber (FFmpegFrameGrabber. path)]
@@ -110,10 +111,11 @@
 
 (defn -main [& args]
   (let [{:keys [path interval area help]} (parse-args args)]
-    (if (or help (not (.exists (File. path))))
+    (if (or help (not path) (not (.exists (File. path))))
       (print-usage)
-      (with-open [grabber (open-video path)]
+      (with-open [grabber (doto (FFmpegFrameGrabber. path)
+                            (.setOption "loglevel" "quiet"))]
+        (.start grabber)
         (let [ref (grab-reference grabber area)
               [ref-kp ref-desc] (detect-and-describe ref)]
-          (println "Starting Real-Time Feature-Based loop on:" path)
           (process-stream grabber ref ref-kp ref-desc interval area))))))

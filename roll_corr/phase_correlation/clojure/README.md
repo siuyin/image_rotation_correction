@@ -9,9 +9,9 @@ This is a high-performance implementation of the Phase Correlation approach for 
 - `deps.edn`: Dependency management (includes `javacv-platform`).
 
 ## How to Run
-To process a video file in real-time (defaulting to `~/tennis1.mp4`):
+To process a video file in real-time (VIDEO_PATH is required):
 ```bash
-make run VIDEO=/path/to/your/video.mp4
+clojure -M -m roll-corr.phase-correlation.core VIDEO_PATH -i 1000 -a 75 2>/dev/null
 ```
 
 ## Implementation Details
@@ -20,3 +20,4 @@ make run VIDEO=/path/to/your/video.mp4
 - **Constraints Met**:
     - **Sampling**: Processes video at fixed time intervals (default 1000ms) using `setTimestamp`.
     - **Region of Interest**: Compares only the central $p\%$ (default 75%) of the image using `get-central-area`.
+    - **Clean Output**: Redirect `2>/dev/null` to suppress verbose FFmpeg/JavaCV metadata.
