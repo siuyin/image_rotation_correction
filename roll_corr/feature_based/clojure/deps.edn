@@ -1,0 +1,4 @@
+{:paths ["src" "test"]
+ :deps {org.clojure/clojure {:mvn/version "1.12.0"}}
+ :aliases
+ {:test {:exec-fn roll-corr.feature-based.test-runner/run}}}

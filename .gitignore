@@ -6,3 +6,18 @@ test_video.mp4
 test.mp4
 
 __pycache__
+
+# Clojure
+.cpcache/
+target/
+classes/
+lib/
+.nrepl-port
+.lsp/
+.calva/
+checkouts/
+pom.xml
+pom.xml.asc
+*.jar
+*.uber.jar
+
