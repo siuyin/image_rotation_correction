@@ -1,4 +1,5 @@
 (ns roll-corr.phase-correlation.core
+  (:gen-class)
   (:import [java.io File]
            [org.bytedeco.javacv FFmpegFrameGrabber OpenCVFrameConverter$ToMat]
            [org.bytedeco.opencv.opencv_core Mat Point2f Size Rect]
@@ -50,10 +51,22 @@
 
 (defn generate-report [roll-angle]
   (println (format "Required Roll Correction: %.2f degrees" roll-angle)))
+(defn- print-usage []
+  (println "Usage: clojure -M -m roll-corr.phase-correlation.core [flags]")
+  (println "  -v, --video PATH      Path to video file (default: ~/tennis1.mp4)")
+  (println "  -i, --interval MS     Sampling interval in ms (default: 1000)")
+  (println "  -a, --area PERCENT    Central area percentage (default: 75)")
+  (println "  -h, --help            Print this help"))
+
 (defn- parse-args [args]
-  {:path (or (first args) (str (System/getProperty "user.home") "/tennis1.mp4"))
-   :interval (Integer/parseInt (or (second args) "1000"))
-   :area (Integer/parseInt (or (nth args 2) "75"))})
+  (loop [args args options {:path (str (System/getProperty "user.home") "/tennis1.mp4") :interval 1000 :area 75}]
+    (cond
+      (empty? args) options
+      (#{ "-h" "--help" } (first args)) (assoc options :help true)
+      (#{ "-v" "--video" } (first args)) (recur (drop 2 args) (assoc options :path (second args)))
+      (#{ "-i" "--interval" } (first args)) (recur (drop 2 args) (assoc options :interval (Integer/parseInt (second args))))
+      (#{ "-a" "--area" } (first args)) (recur (drop 2 args) (assoc options :area (Integer/parseInt (second args))))
+      :else options)))
 
 (defn- open-video [path]
   (let [grabber (FFmpegFrameGrabber. path)]
@@ -85,10 +98,10 @@
         (println "Reached end of video.")))))
 
 (defn -main [& args]
-  (let [{:keys [path interval area]} (parse-args args)]
-    (if (.exists (File. path))
+  (let [{:keys [path interval area help]} (parse-args args)]
+    (if (or help (not (.exists (File. path))))
+      (print-usage)
       (with-open [grabber (open-video path)]
         (let [ref (grab-reference grabber area)]
           (println "Starting Real-Time Phase Correlation loop on:" path)
-          (process-stream grabber ref interval area)))
-      (println "Video file not found:" path))))
+          (process-stream grabber ref interval area))))))
