@@ -21,3 +21,4 @@ pom.xml.asc
 *.jar
 *.uber.jar
 
+hs_err*

@@ -1,7 +1,7 @@
 (ns roll-corr.feature-based.core
   (:import [java.io File]
            [org.bytedeco.javacv FFmpegFrameGrabber OpenCVFrameConverter$ToMat]
-           [org.bytedeco.opencv.opencv_core Mat KeyPoint DMatch Rect Point2f]
+           [org.bytedeco.opencv.opencv_core Mat KeyPoint DMatch Rect Point2f Point2fVector KeyPointVector DMatchVector]
            [org.bytedeco.opencv.opencv_features2d ORB DescriptorMatcher]
            [org.bytedeco.opencv.global opencv_core opencv_imgproc opencv_features2d opencv_calib3d]))
 
@@ -17,30 +17,44 @@
 
 (defn detect-and-describe [^Mat image]
   (let [orb (ORB/create)
-        keypoints (KeyPoint.)
+        keypoints (KeyPointVector.)
         descriptors (Mat.)]
     (.detectAndCompute orb image (Mat.) keypoints descriptors)
     [keypoints descriptors]))
 
 (defn match-features [descriptors-R descriptors-V]
   (let [matcher (DescriptorMatcher/create DescriptorMatcher/BRUTEFORCE_HAMMING)
-        matches (DMatch.)]
+        matches (DMatchVector.)]
     (.match matcher descriptors-R descriptors-V matches)
     matches))
 
 (defn solve-geometric-mapping [kp-R kp-V matches]
-  (let [src-pts (opencv_core.Point2fVector.)
-        dst-pts (opencv_core.Point2fVector.)
-        _ (doseq [i (range (.size matches))]
-            (let [m (.get matches i)]
-              (.push_back src-pts (.pt (.get kp-R (.queryIdx m))))
-              (.push_back dst-pts (.pt (.get kp-V (.trainIdx m))))))
-        mapping (opencv_calib3d/findHomography src-pts dst-pts opencv_calib3d/RANSAC 3.0)]
-    mapping))
+  (if (>= (.size matches) 4)
+    (let [n (.size matches)
+          src-mat (Mat. n 2 opencv_core/CV_32F)
+          dst-mat (Mat. n 2 opencv_core/CV_32F)
+          src-indexer (.createIndexer src-mat)
+          dst-indexer (.createIndexer dst-mat)
+          _ (doseq [i (range n)]
+              (let [m (.get matches i)
+                    ptR (.pt (.get kp-R (.queryIdx m)))
+                    ptV (.pt (.get kp-V (.trainIdx m)))]
+                (.put src-indexer i 0 (float (.x ptR)))
+                (.put src-indexer i 1 (float (.y ptR)))
+                (.put dst-indexer i 0 (float (.x ptV)))
+                (.put dst-indexer i 1 (float (.y ptV)))))
+          mapping (opencv_calib3d/findHomography src-mat dst-mat (Mat.) opencv_calib3d/RANSAC 3.0)]
+      mapping)
+    nil))
 
 (defn decompose-transformation [^Mat mapping]
-  {:pitch 0.0 :yaw 0.0 :zoom 1.0 
-   :roll (Math/toDegrees (Math/atan2 (.get mapping 1 0) (.get mapping 0 0)))})
+  (if (and mapping (not (.empty mapping)))
+    (let [indexer (.createIndexer mapping)
+          m00 (.get indexer (long-array [0 0]))
+          m10 (.get indexer (long-array [1 0]))]
+      {:pitch 0.0 :yaw 0.0 :zoom 1.0 
+       :roll (Math/toDegrees (Math/atan2 m10 m00))})
+    {:pitch 0.0 :yaw 0.0 :zoom 1.0 :roll 0.0}))
 
 (defn generate-report [roll-angle]
   (println (format "Required Roll Correction: %.2f degrees" roll-angle)))
