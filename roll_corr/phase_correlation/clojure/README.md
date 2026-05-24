@@ -23,6 +23,7 @@ docker build -t roll-corr-phase -f roll_corr/phase_correlation/clojure/Dockerfil
 # Run
 docker run -e INTERVAL=500 -e AREA=50 -v /path/to/video:/app/video.mp4 roll-corr-phase /app/video.mp4
 ```
+*Note: The build context is optimized using a root-level `.dockerignore` file, which excludes unnecessary files like `target/`, `.cpcache/`, and `.git/`.*
 
 ## Implementation Details
 - **Real-Time Performance**: Utilizes native C++ OpenCV functions (`phaseCorrelate`, `warpPolar`) via JavaCV wrappers for high-speed computation.

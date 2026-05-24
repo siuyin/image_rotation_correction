@@ -1,0 +1,11 @@
+.git/
+.gitignore
+target/
+.cpcache/
+__pycache__/
+.pytest_cache/
+.venv/
+*.jar
+*.mp4
+*.png
+.DS_Store
