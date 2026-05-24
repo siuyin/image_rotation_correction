@@ -19,4 +19,4 @@ make run VIDEO=/path/to/your/video.mp4
 - **Video Input**: Uses `FFmpegFrameGrabber` to directly extract and process frames from MP4 files.
 - **Constraints Met**:
     - **Sampling**: Processes video at fixed time intervals (default 1000ms) using `setTimestamp`.
-    - **Region of Interest**: Compares only the central $p\%$ (default 75%) of the image.
+    - **Region of Interest**: Compares only the central $p\%$ (default 75%) of the image using `get-central-area`.

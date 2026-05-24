@@ -29,23 +29,23 @@
     matches))
 
 (defn solve-geometric-mapping [kp-R kp-V matches]
-  (if (>= (.size matches) 4)
-    (let [n (.size matches)
-          src-mat (Mat. n 2 opencv_core/CV_32F)
-          dst-mat (Mat. n 2 opencv_core/CV_32F)
-          src-indexer (.createIndexer src-mat)
-          dst-indexer (.createIndexer dst-mat)
-          _ (doseq [i (range n)]
-              (let [m (.get matches i)
-                    ptR (.pt (.get kp-R (.queryIdx m)))
-                    ptV (.pt (.get kp-V (.trainIdx m)))]
-                (.put src-indexer i 0 (float (.x ptR)))
-                (.put src-indexer i 1 (float (.y ptR)))
-                (.put dst-indexer i 0 (float (.x ptV)))
-                (.put dst-indexer i 1 (float (.y ptV)))))
-          mapping (opencv_calib3d/findHomography src-mat dst-mat (Mat.) opencv_calib3d/RANSAC 3.0)]
-      mapping)
-    nil))
+  (let [n (.size matches)]
+    (if (>= n 4)
+      (let [src-mat (Mat. n 2 opencv_core/CV_32F)
+            dst-mat (Mat. n 2 opencv_core/CV_32F)
+            src-indexer (.createIndexer src-mat)
+            dst-indexer (.createIndexer dst-mat)
+            _ (doseq [i (range n)]
+                (let [m (.get matches i)
+                      ptR (.pt (.get ^KeyPointVector kp-R (.queryIdx m)))
+                      ptV (.pt (.get ^KeyPointVector kp-V (.trainIdx m)))]
+                  (.put src-indexer i 0 (float (.x ptR)))
+                  (.put src-indexer i 1 (float (.y ptR)))
+                  (.put dst-indexer i 0 (float (.x ptV)))
+                  (.put dst-indexer i 1 (float (.y ptV)))))
+            mapping (opencv_calib3d/findHomography src-mat dst-mat (Mat.) opencv_calib3d/RANSAC 3.0)]
+        mapping)
+      nil)))
 
 (defn decompose-transformation [^Mat mapping]
   (if (and mapping (not (.empty mapping)))
@@ -59,35 +59,48 @@
 (defn generate-report [roll-angle]
   (println (format "Required Roll Correction: %.2f degrees" roll-angle)))
 
+(defn- parse-args [args]
+  {:path (or (first args) (str (System/getProperty "user.home") "/tennis1.mp4"))
+   :interval (Integer/parseInt (or (second args) "1000"))
+   :area (Integer/parseInt (or (nth args 2) "75"))})
+
+(defn- open-video [path]
+  (let [grabber (FFmpegFrameGrabber. path)]
+    (.start grabber)
+    grabber))
+
+(defn- grab-reference [grabber area]
+  (let [converter (OpenCVFrameConverter$ToMat.)
+        frame (.grabImage grabber)
+        img (.convert converter frame)
+        gray (Mat.)]
+    (opencv_imgproc/cvtColor img gray opencv_imgproc/COLOR_BGR2GRAY)
+    (get-central-area gray area)))
+
+(defn- process-stream [grabber ref-central ref-kp ref-desc interval area]
+  (let [converter (OpenCVFrameConverter$ToMat.)]
+    (loop [current-time-us 0]
+      (.setTimestamp grabber current-time-us)
+      (if-let [frame (.grabImage grabber)]
+        (let [img (.convert converter frame)
+              gray (Mat.)]
+          (opencv_imgproc/cvtColor img gray opencv_imgproc/COLOR_BGR2GRAY)
+          (let [central (get-central-area gray area)
+                [kp-V desc-V] (detect-and-describe central)
+                matches (match-features ref-desc desc-V)
+                mapping (solve-geometric-mapping ref-kp kp-V matches)
+                {:keys [roll]} (decompose-transformation mapping)]
+            (printf "Time %.2fs - " (/ current-time-us 1000000.0))
+            (generate-report roll)
+            (recur (+ current-time-us (* interval 1000)))))
+        (println "Reached end of video.")))))
+
 (defn -main [& args]
-  (let [video-path (or (first args) (str (System/getProperty "user.home") "/tennis1.mp4"))
-        sampling-m (Integer/parseInt (or (second args) "1000"))
-        p-area (Integer/parseInt (or (nth args 2 "75")))
-        file (File. video-path)]
-    (if (.exists file)
-      (with-open [grab (FFmpegFrameGrabber. file)]
-        (let [converter (OpenCVFrameConverter$ToMat.)]
-          (.start grab)
-          (let [first-frame (.grabImage grab)
-                R (.convert converter first-frame)
-                R-gray (Mat.)]
-            (opencv_imgproc/cvtColor R R-gray opencv_imgproc/COLOR_BGR2GRAY)
-            (let [R-central (get-central-area R-gray p-area)
-                  [kp-R desc-R] (detect-and-describe R-central)]
-              (println "Starting Real-Time Feature-Based loop on:" video-path)
-              (loop [current-time-us 0]
-                (.setTimestamp grab current-time-us)
-                (if-let [frame (.grabImage grab)]
-                  (let [V-n (.convert converter frame)
-                        V-n-gray (Mat.)]
-                    (opencv_imgproc/cvtColor V-n V-n-gray opencv_imgproc/COLOR_BGR2GRAY)
-                    (let [V-n-central (get-central-area V-n-gray p-area)
-                          [kp-V desc-V] (detect-and-describe V-n-central)
-                          matches (match-features desc-R desc-V)
-                          mapping (solve-geometric-mapping kp-R kp-V matches)
-                          {:keys [roll]} (decompose-transformation mapping)]
-                      (printf "Time %.2fs - " (/ current-time-us 1000000.0))
-                      (generate-report roll)
-                      (recur (+ current-time-us (* sampling-m 1000)))))
-                  (println "Reached end of video.")))))))
-      (println "Video file not found:" video-path))))
+  (let [{:keys [path interval area]} (parse-args args)]
+    (if (.exists (File. path))
+      (with-open [grabber (open-video path)]
+        (let [ref (grab-reference grabber area)
+              [ref-kp ref-desc] (detect-and-describe ref)]
+          (println "Starting Real-Time Feature-Based loop on:" path)
+          (process-stream grabber ref ref-kp ref-desc interval area)))
+      (println "Video file not found:" path))))

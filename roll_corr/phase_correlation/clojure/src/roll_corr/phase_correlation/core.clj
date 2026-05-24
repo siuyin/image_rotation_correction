@@ -50,33 +50,45 @@
 
 (defn generate-report [roll-angle]
   (println (format "Required Roll Correction: %.2f degrees" roll-angle)))
+(defn- parse-args [args]
+  {:path (or (first args) (str (System/getProperty "user.home") "/tennis1.mp4"))
+   :interval (Integer/parseInt (or (second args) "1000"))
+   :area (Integer/parseInt (or (nth args 2) "75"))})
+
+(defn- open-video [path]
+  (let [grabber (FFmpegFrameGrabber. path)]
+    (.start grabber)
+    grabber))
+
+(defn- grab-reference [grabber area]
+  (let [converter (OpenCVFrameConverter$ToMat.)
+        frame (.grabImage grabber)
+        img (.convert converter frame)
+        gray (Mat.)]
+    (opencv_imgproc/cvtColor img gray opencv_imgproc/COLOR_BGR2GRAY)
+    (get-central-area gray area)))
+
+(defn- process-stream [grabber ref-central interval area]
+  (let [converter (OpenCVFrameConverter$ToMat.)]
+    (loop [current-time-us 0]
+      (.setTimestamp grabber current-time-us)
+      (if-let [frame (.grabImage grabber)]
+        (let [img (.convert converter frame)
+              gray (Mat.)]
+          (opencv_imgproc/cvtColor img gray opencv_imgproc/COLOR_BGR2GRAY)
+          (let [central (get-central-area gray area)
+                _ (estimate-pitch-yaw ref-central central)
+                {:keys [roll]} (estimate-zoom-roll ref-central central)]
+            (printf "Time %.2fs - " (/ current-time-us 1000000.0))
+            (generate-report roll)
+            (recur (+ current-time-us (* interval 1000)))))
+        (println "Reached end of video.")))))
 
 (defn -main [& args]
-  (let [video-path (or (first args) (str (System/getProperty "user.home") "/tennis1.mp4"))
-        sampling-m (Integer/parseInt (or (second args) "1000"))
-        p-area (Integer/parseInt (or (nth args 2 "75")))
-        file (File. video-path)]
-    (if (.exists file)
-      (with-open [grab (FFmpegFrameGrabber. file)]
-        (let [converter (OpenCVFrameConverter$ToMat.)]
-          (.start grab)
-          (let [first-frame (.grabImage grab)
-                R (.convert converter first-frame)
-                R-gray (Mat.)]
-            (opencv_imgproc/cvtColor R R-gray opencv_imgproc/COLOR_BGR2GRAY)
-            (let [R-central (get-central-area R-gray p-area)]
-              (println "Starting Real-Time Phase Correlation loop on:" video-path)
-              (loop [current-time-us 0]
-                (.setTimestamp grab current-time-us)
-                (if-let [frame (.grabImage grab)]
-                  (let [V-n (.convert converter frame)
-                        V-n-gray (Mat.)]
-                    (opencv_imgproc/cvtColor V-n V-n-gray opencv_imgproc/COLOR_BGR2GRAY)
-                    (let [V-n-central (get-central-area V-n-gray p-area)
-                          _ (estimate-pitch-yaw R-central V-n-central)
-                          {:keys [roll]} (estimate-zoom-roll R-central V-n-central)]
-                      (printf "Time %.2fs - " (/ current-time-us 1000000.0))
-                      (generate-report roll)
-                      (recur (+ current-time-us (* sampling-m 1000)))))
-                  (println "Reached end of video.")))))))
-      (println "Video file not found:" video-path))))
+  (let [{:keys [path interval area]} (parse-args args)]
+    (if (.exists (File. path))
+      (with-open [grabber (open-video path)]
+        (let [ref (grab-reference grabber area)]
+          (println "Starting Real-Time Phase Correlation loop on:" path)
+          (process-stream grabber ref interval area)))
+      (println "Video file not found:" path))))
