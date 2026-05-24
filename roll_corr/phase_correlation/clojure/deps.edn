@@ -2,4 +2,6 @@
  :deps {org.clojure/clojure {:mvn/version "1.12.0"}
         org.bytedeco/javacv-platform {:mvn/version "1.5.10"}}
  :aliases
- {:test {:exec-fn roll-corr.phase-correlation.test-runner/run}}}
+ {:test {:exec-fn roll-corr.phase-correlation.test-runner/run}
+  :build {:deps {io.github.clojure/tools.build {:mvn/version "0.10.6"}}
+          :ns-default build}}}
