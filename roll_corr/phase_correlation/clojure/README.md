@@ -1,20 +1,22 @@
 # Phase Correlation - Clojure Implementation
 
-This is a fundamental implementation of the Phase Correlation approach for roll correction, using only the Clojure standard library and Java Math.
+This is a high-performance implementation of the Phase Correlation approach for roll correction, leveraging native OpenCV and FFmpeg via JavaCV for real-time performance.
 
 ## Project Structure
-- `src/roll_corr/phase_correlation/core.clj`: Main implementation.
+- `src/roll_corr/phase_correlation/core.clj`: Main implementation using JavaCV.
 - `test/roll_corr/phase_correlation/core_test.clj`: Test suite.
-- `Makefile`: Automation for running tests.
-- `deps.edn`: Dependency management.
+- `Makefile`: Automation for running tests and real-time processing.
+- `deps.edn`: Dependency management (includes `javacv-platform`).
 
-## How to Run Tests
-Execute the following command in this directory:
+## How to Run
+To process a video file in real-time (defaulting to `~/tennis1.mp4`):
 ```bash
-make test
+make run VIDEO=/path/to/your/video.mp4
 ```
 
 ## Implementation Details
-- **Fundamentals Approach**: Functions are implemented from first principles.
-- **Image Representation**: Images are represented as 2D vectors of intensity values (0.0 to 1.0).
-- **Frequency Domain**: Placeholders for FFT/IFFT are provided; for production use, high-performance libraries like `neanderthal` or `opencv-clj` are recommended.
+- **Real-Time Performance**: Utilizes native C++ OpenCV functions (`phaseCorrelate`, `warpPolar`) via JavaCV wrappers for high-speed computation.
+- **Video Input**: Uses `FFmpegFrameGrabber` to directly extract and process frames from MP4 files.
+- **Constraints Met**:
+    - **Sampling**: Processes video at fixed time intervals (default 1000ms) using `setTimestamp`.
+    - **Region of Interest**: Compares only the central $p\%$ (default 75%) of the image.
