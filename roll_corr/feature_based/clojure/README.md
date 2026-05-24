@@ -14,6 +14,16 @@ To process a video file in real-time (VIDEO_PATH is required):
 clojure -M -m roll-corr.feature-based.core VIDEO_PATH -i 1000 -a 75 2>/dev/null
 ```
 
+## Docker Containerization
+To build and run as a container (run these commands from the project root):
+```bash
+# Build
+docker build -t roll-corr-feat -f roll_corr/feature_based/clojure/Dockerfile .
+
+# Run
+docker run -e INTERVAL=500 -e AREA=50 -v /path/to/video:/app/video.mp4 roll-corr-feat /app/video.mp4
+```
+
 ## Implementation Details
 - **Real-Time Performance**: Utilizes native C++ OpenCV functions (`ORB`, `findHomography`) via JavaCV wrappers for high-speed tracking and geometric mapping.
 - **Video Input**: Uses `FFmpegFrameGrabber` to directly extract and process frames from MP4 files.

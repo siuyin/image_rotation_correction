@@ -68,15 +68,23 @@
   (println "  -a, --area PERCENT    Central area percentage (default: 75)")
   (println "  -h, --help            Print this help"))
 
+(defn- get-env-or-default [key default]
+  (let [val (System/getenv key)]
+    (if val (Integer/parseInt val) default)))
+
 (defn- parse-args [args]
-  (let [path (first (remove #(str/starts-with? % "-") args))]
-    (loop [args (remove #(= % path) args) options {:path path :interval 1000 :area 75}]
-      (cond
-        (empty? args) options
-        (#{ "-h" "--help" } (first args)) (assoc options :help true)
-        (#{ "-i" "--interval" } (first args)) (recur (drop 2 args) (assoc options :interval (Integer/parseInt (second args))))
-        (#{ "-a" "--area" } (first args)) (recur (drop 2 args) (assoc options :area (Integer/parseInt (second args))))
-        :else options))))
+  (let [path (first (remove #(str/starts-with? % "-") args))
+        options (loop [args (remove #(= % path) args)
+                       options {:path path
+                                :interval (get-env-or-default "INTERVAL" 1000)
+                                :area (get-env-or-default "AREA" 75)}]
+                  (cond
+                    (empty? args) options
+                    (#{ "-h" "--help" } (first args)) (assoc options :help true)
+                    (#{ "-i" "--interval" } (first args)) (recur (drop 2 args) (assoc options :interval (Integer/parseInt (second args))))
+                    (#{ "-a" "--area" } (first args)) (recur (drop 2 args) (assoc options :area (Integer/parseInt (second args))))
+                    :else options))]
+    options))
 
 (defn- open-video [path]
   (let [grabber (FFmpegFrameGrabber. path)]
