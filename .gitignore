@@ -21,4 +21,13 @@ pom.xml.asc
 *.jar
 *.uber.jar
 
+# C++
+**/build/
+**/CMakeFiles/
+**/CMakeCache.txt
+**/Makefile
+**/cmake_install.cmake
+*.o
+*.a
+
 hs_err*
