@@ -54,27 +54,49 @@ TransformationParams decompose_transformation(const cv::Mat& mapping) {
     return params;
 }
 
-void process_video(const std::string& path, int interval_ms, double area_percent) {
+TransformationParams compute_frame_roll(const cv::Mat& frame, const std::vector<cv::KeyPoint>& ref_kp, const cv::Mat& ref_desc, double area_percent) {
+    cv::Mat gray, central;
+    cv::cvtColor(frame, gray, cv::COLOR_BGR2GRAY);
+    central = get_central_area(gray, area_percent);
+    std::vector<cv::KeyPoint> kp;
+    cv::Mat desc;
+    detect_and_describe(central, kp, desc);
+    return decompose_transformation(solve_geometric_mapping(ref_kp, kp, match_features(ref_desc, desc)));
+}
+
+void log_roll_correction(int frame_idx, double fps, double roll) {
+    std::cout << "Time " << std::fixed << std::setprecision(2) << frame_idx / fps
+              << "s - Required Roll Correction: " << roll << " degrees" << std::endl;
+}
+
+cv::VideoCapture open_video(const std::string& path) {
     cv::VideoCapture cap(path);
     if (!cap.isOpened()) throw std::runtime_error("Could not open video");
-    cv::Mat frame, gray, ref_central, ref_desc;
-    std::vector<cv::KeyPoint> ref_kp;
-    cap.read(frame);
+    return cap;
+}
+
+void initialize_reference(cv::VideoCapture& cap, double area_percent, std::vector<cv::KeyPoint>& ref_kp, cv::Mat& ref_desc) {
+    cv::Mat frame, gray, central;
+    if (!cap.read(frame)) throw std::runtime_error("Could not read first frame");
     cv::cvtColor(frame, gray, cv::COLOR_BGR2GRAY);
-    ref_central = get_central_area(gray, area_percent);
-    detect_and_describe(ref_central, ref_kp, ref_desc);
+    central = get_central_area(gray, area_percent);
+    detect_and_describe(central, ref_kp, ref_desc);
+}
+
+void process_video(const std::string& path, int interval_ms, double area_percent) {
+    auto cap = open_video(path);
+    std::vector<cv::KeyPoint> ref_kp;
+    cv::Mat ref_desc;
+    initialize_reference(cap, area_percent, ref_kp, ref_desc);
+    
     double fps = cap.get(cv::CAP_PROP_FPS);
     int step = std::max(1, static_cast<int>(interval_ms * fps / 1000.0));
     int idx = 0;
+    cv::Mat frame;
     while (cap.read(frame)) {
         if (++idx % step != 0) continue;
-        cv::cvtColor(frame, gray, cv::COLOR_BGR2GRAY);
-        cv::Mat central = get_central_area(gray, area_percent);
-        std::vector<cv::KeyPoint> kp;
-        cv::Mat desc;
-        detect_and_describe(central, kp, desc);
-        auto params = decompose_transformation(solve_geometric_mapping(ref_kp, kp, match_features(ref_desc, desc)));
-        std::cout << "Time " << std::fixed << std::setprecision(2) << idx / fps << "s - Required Roll Correction: " << params.roll << " degrees" << std::endl;
+        auto params = compute_frame_roll(frame, ref_kp, ref_desc, area_percent);
+        log_roll_correction(idx, fps, params.roll);
     }
 }
 } // namespace RollCorrection

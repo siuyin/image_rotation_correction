@@ -1,4 +1,4 @@
-re# C++ Feature-Based Roll Correction
+pleare# C++ Feature-Based Roll Correction
 
 This tool calculates the required roll correction for video frames using feature matching (ORB) and homography estimation, mirroring the functionality of the Clojure implementation.
 
@@ -34,6 +34,21 @@ Use the provided `Makefile` to manage the project:
   ```bash
   make docker-build
   ```
+
+## Docker Build Instructions
+
+1. Ensure Docker is installed.
+
+2. Build the Docker image:
+   ```bash
+   make docker-build
+   ```
+
+3. Run the container:
+   Replace `/home/user/videos` with the path to your video file's directory:
+   ```bash
+   docker run --rm -v /home/user/videos:/app/video roll-corr-cpp /app/video/tennis1.mp4
+   ```
 
 ## Memory Analysis Note
 Valgrind analysis shows "0 bytes definitely lost" in the application logic. Any "still reachable" memory reported is typical of initialized libraries (like OpenCV or Glibc) and does not indicate a memory leak in the tool itself.
