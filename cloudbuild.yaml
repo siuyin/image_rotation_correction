@@ -1,0 +1,30 @@
+steps:
+  # Build and push the intermediate builder image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: [
+      'build',
+      '-t', 'us-central1-docker.pkg.dev/lsy202605/roll-corr-repo/builder-base:latest',
+      '-f', 'roll_corr/feature_based/go/Dockerfile.base',
+      '.'
+    ]
+  - name: 'gcr.io/cloud-builders/docker'
+    args: [
+      'push',
+      'us-central1-docker.pkg.dev/lsy202605/roll-corr-repo/builder-base:latest'
+    ]
+
+  # Build and push the application image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: [
+      'build',
+      '-t', 'us-central1-docker.pkg.dev/lsy202605/roll-corr-repo/roll-corr-go:latest',
+      '-f', 'roll_corr/feature_based/go/Dockerfile',
+      '.'
+    ]
+  - name: 'gcr.io/cloud-builders/docker'
+    args: [
+      'push',
+      'us-central1-docker.pkg.dev/lsy202605/roll-corr-repo/roll-corr-go:latest'
+    ]
+images:
+  - 'us-central1-docker.pkg.dev/lsy202605/roll-corr-repo/roll-corr-go:latest'

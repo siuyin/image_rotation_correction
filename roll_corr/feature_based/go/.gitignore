@@ -1,0 +1,20 @@
+# Build artifacts
+rolldet_app
+.cpcache/
+target/
+
+# Go environment
+go.sum
+go.mod
+
+# IDE/Editor files
+.vscode/
+.idea/
+
+# Environment files
+.env
+.venv/
+__pycache__/
+
+# System files
+.DS_Store
