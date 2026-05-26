@@ -3,8 +3,11 @@ kind: Config
 metadata:
   name: roll-corr-go
 build:
+  tagPolicy:
+    gitCommit: {}
   local:
-    push: false
+    #push: false
+    push: true
   #googleCloudBuild:
   #  projectId: lsy202605
   artifacts:
