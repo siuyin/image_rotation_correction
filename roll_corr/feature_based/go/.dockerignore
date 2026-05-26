@@ -1,0 +1,11 @@
+build/
+.git/
+*.o
+*.a
+CMakeFiles/
+CMakeCache.txt
+Makefile
+cmake_install.cmake
+.pytest_cache/
+__pycache__/
+vendor/
