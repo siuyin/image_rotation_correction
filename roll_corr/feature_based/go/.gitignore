@@ -3,10 +3,6 @@ rolldet_app
 .cpcache/
 target/
 
-# Go environment
-go.sum
-go.mod
-
 # IDE/Editor files
 .vscode/
 .idea/
