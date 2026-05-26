@@ -4,6 +4,8 @@ metadata:
   name: roll-corr-go
 build:
   local: {}
+  #googleCloudBuild:
+  #  projectId: lsy202605
   artifacts:
     - image: us-central1-docker.pkg.dev/lsy202605/roll-corr-repo/roll-corr-go
       context: roll_corr/feature_based/go
