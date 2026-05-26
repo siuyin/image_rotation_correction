@@ -3,11 +3,13 @@ kind: Config
 metadata:
   name: roll-corr-go
 build:
-  local: {}
+  local:
+    push: false
   #googleCloudBuild:
   #  projectId: lsy202605
   artifacts:
-    - image: us-central1-docker.pkg.dev/lsy202605/roll-corr-repo/roll-corr-go
+    #- image: us-central1-docker.pkg.dev/lsy202605/roll-corr-repo/roll-corr-go
+    - image: roll-corr-go
       context: roll_corr/feature_based/go
       docker:
         dockerfile: Dockerfile
