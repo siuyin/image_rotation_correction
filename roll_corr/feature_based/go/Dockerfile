@@ -21,7 +21,8 @@ RUN for lib in $(ldd /rolldet_app | grep "=> /" | awk '{print $3}'); do \
     done
 
 # Final stage
-FROM gcr.io/distroless/cc-debian12
+#FROM gcr.io/distroless/cc-debian12
+FROM gcr.io/distroless/static-debian13
 
 # Copy everything from the dist directory
 COPY --from=builder /dist /
