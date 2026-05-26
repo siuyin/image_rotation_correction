@@ -82,6 +82,7 @@ func (p *Processor) run() {
 	frame := gocv.NewMat()
 	defer frame.Close()
 
+	fmt.Println("Virtual Horizon roll correction:")
 	idx := 0
 	for p.cap.Read(&frame) {
 		idx++
@@ -92,7 +93,7 @@ func (p *Processor) run() {
 		matches := rolldet.MatchFeatures(p.refDesc, desc)
 		mapping = rolldet.SolveGeometricMapping(p.refKp, kp, matches)
 		params := rolldet.DecomposeTransformation(mapping)
-		fmt.Println(fmt.Sprintf("%.2fs:\t%.2f deg", float64(idx)/p.fps, params.Roll))
+		fmt.Println(fmt.Sprintf("%.2fs:\t%.2f°", float64(idx)/p.fps, params.Roll))
 		central.Close()
 		desc.Close()
 		mapping.Close()
